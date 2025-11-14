@@ -62,19 +62,22 @@ Users (or clients) can cancel an in-progress stream and optionally request the m
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST accept a chat request containing: a conversation identifier (optional), a user message, and client metadata (e.g., client id, request id).
+- **FR-001**: The system MUST accept a chat request containing: a conversation identifier (optional), a user message (text-only, no images/files), and client metadata (e.g., client id, request id).
 - **FR-002**: The system MUST return AI-generated output as a sequence of ordered stream chunks, plus a final completion marker when the model finishes.
 - **FR-003**: The system MUST deliver the first response chunk within 1 second (perceived latency target) for typical short prompts under normal load.
 - **FR-004**: The system MUST allow clients to cancel an in-progress stream and receive a confirmation of cancellation.
 - **FR-005**: The system MUST support multi-turn context by accepting previous messages for the same conversation identifier and using them as context for subsequent responses.
 - **FR-006**: The system MUST return structured error information in-stream when an error occurs (e.g., provider error, validation error), then terminate the stream gracefully.
 - **FR-007**: The system MUST implement basic rate-limiting to prevent abuse (enforced at API/gateway level).
+- **FR-008**: The chat input field MUST accept text-only content (no images, files, or rich formatting); MVP scope limits support to plain text messages.
+- **FR-009**: The system MUST support session-based user tracking (anonymous users with browser/device-tied sessions); each conversation is associated with a session identifier (no user accounts required for MVP).
 
 ### Non-functional Requirements (MVP)
 
 - **NFR-001**: Support at least 100 concurrent active streaming sessions with graceful degradation (MVP target — adjust based on infra capacity).
 - **NFR-002**: Stream chunk ordering MUST be preserved; clients MUST be able to reassemble chunks into the full response in order.
 - **NFR-003**: Logs MUST record at least: request id, conversation id, client id, timestamps for stream start/finish, and error details.
+- **NFR-004**: Web UI MUST be built using a modern frontend framework (React or Vue) deployed on Cloudflare Workers; component-based architecture with state management and smooth transitions/animations for "clean, modern" aesthetic.
 
 ### Key Entities
 
@@ -92,11 +95,26 @@ Users (or clients) can cancel an in-progress stream and optionally request the m
 - **SC-003**: Cancellation requests are acknowledged within 500ms for 95% of attempts.
 - **SC-004**: In a small manual evaluation (n=50), at least 80% of responses are judged coherent and relevant to the prompt/context.
 
+## Clarifications
+
+### Session 2025-11-14
+
+- Q: AI provider failure strategy? → A: Fail-fast (return error chunk immediately; user sees error in UI within 1s). MVP prioritizes predictable, clear error messaging over retry logic.
+- Q: Chat input content types? → A: Text-only (no images, files, or rich formatting). Aligns with MVP scope and "simple" requirement.
+- Q: Web UI technology & styling? → A: Modern frontend framework (React/Vue component-based UI with state management). Built for Cloudflare Workers context; delivers clean, modern interface with transitions and animations.
+- Q: Conversation persistence? → A: External database (D1 or third-party DB) for full conversation history persistence; conversations stored permanently and retrievable across sessions.
+- Q: User authentication & authorization? → A: Session-based tracking (anonymous users can create conversations; sessions tied to browser/device; no user accounts required). Balances traceability with MVP simplicity.
+
 ## Assumptions
 
 - An external AI inference provider is available and accessible from the runtime (provider choice is out of scope for this spec).
+- When the AI provider is unavailable or returns an error, the system returns an error chunk immediately (fail-fast behavior per clarification Q1).
+- Chat input is text-only; images, files, and rich formatting are explicitly out of scope for MVP (per Q2).
+- Web UI is built using a modern frontend framework (React/Vue) deployed on Cloudflare Workers with component-based architecture (per Q3).
+- Conversation history is persisted in an external database (D1 or third-party); conversations are retrievable across user sessions indefinitely (per Q4).
+- User identification is session-based and anonymous (no user accounts); sessions are tied to browser/device and tracked via session ID (per Q5).
 - Authentication and production-grade rate-limiting are not required for MVP; basic rate-limiting and abuse protections are required.
-- Storage of conversation history (if needed) will use a suitable short-term store; long-term persistence is out of scope for MVP.
+- Storage of conversation history will use a database suitable for full persistence; long-term lifecycle (archival, deletion policies) is out of scope for MVP.
 
 ## Acceptance / Testing Notes
 
