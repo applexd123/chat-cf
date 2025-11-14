@@ -1,50 +1,96 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report
+- Version change: TEMPLATE -> 1.0.0
+- Modified principles: (added Cloudflare-focused principles)
+- Added sections: Security & Secrets Management, Development Workflow (Cloudflare tooling)
+- Removed sections: none (template placeholders replaced)
+- Templates requiring updates: 
+	- .specify/templates/plan-template.md -> ✅ reviewed (Constitution Check present)
+	- .specify/templates/spec-template.md -> ✅ reviewed
+	- .specify/templates/tasks-template.md -> ✅ reviewed
+	- .specify/templates/agent-file-template.md -> ⚠ pending (agent guidance may need Cloudflare examples)
+	- README.md -> ✅ reviewed (quickstart references preserved)
+- Follow-up TODOs: none
+-->
+
+# chat-cf Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Serverless-First (NON-NEGOTIABLE)
+All new functionality MUST be designed for Cloudflare Workers execution and the
+edge environment. Functions should be stateless where possible, avoid long-running
+processes, and fit within Workers CPU/memory limits. Prefer using Cloudflare
+managed services (Durable Objects, D1, KV, R2) for state and coordination.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+Rationale: This repository is built for Cloudflare's edge platform; designs that
+assume a long-lived server or specialized OS features are incompatible.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### II. Type & Binding Safety
+All runtime integrations (bindings) MUST be declared in `wrangler.jsonc` and
+type-synchronized by running `pnpm run cf-typegen`. The generated
+`worker-configuration.d.ts` is the authoritative type for `CloudflareBindings`.
+Handlers MUST instantiate Hono with the binding generic: `new Hono<{ Bindings:
+CloudflareBindings }>()`.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+Rationale: Explicit bindings + generated types prevent silent runtime errors
+when deploying to different environments.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### III. Minimal Bundle & Compatibility
+Workers MUST keep the Worker bundle minimal: prefer native APIs and small
+dependencies. Update `compatibility_date` in `wrangler.jsonc` deliberately and
+document rationale when changing it. Avoid Node-specific APIs; use ESNext
+modules and `jsxImportSource: "hono/jsx"` where applicable.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+Rationale: Small bundles reduce cold-start and deployment size; compatibility
+date controls runtime behavior at Cloudflare edge.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### IV. Observability & Local Parity
+Applications MUST enable observability (see `wrangler.jsonc.observability`). Use
+structured logging and instrument key endpoints. During development use
+`pnpm run dev` (Wrangler) to test local Worker behavior; validate responses and
+asset bindings (ASSETS) match production behavior.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+Rationale: Edge debugging is different from server debugging; ensure logs and
+observability are present before deployment.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### V. Deployment-as-Code & Type-First Workflow
+Deployment and environment configuration MUST be managed via `wrangler.jsonc`.
+Secrets must use Wrangler secrets (do NOT commit secrets to the repo). Type
+generation (`pnpm run cf-typegen`) MUST be part of the developer workflow and
+CI before deployment.
+
+Rationale: Declarative deployment ensures reproducible environments and safer
+rollouts.
+
+## Security & Secrets Management
+
+- Store all sensitive values with `wrangler secret` or Cloudflare Secrets; never
+	check secrets into source control.
+- Ensure third-party integrations list required bindings in `wrangler.jsonc` and
+	document access scopes.
+- Validate external requests and sanitize inputs in Worker handlers.
+
+## Development Workflow
+
+- Local dev: `pnpm run dev` (starts `wrangler dev`). Use the browser to
+	exercise `public/index.html` and API endpoints (e.g., `/message`).
+- Types: run `pnpm run cf-typegen` after modifying `wrangler.jsonc` or adding
+	bindings; commit the resulting `worker-configuration.d.ts` file.
+- Build/Deploy: `pnpm run deploy` for production deploys (uses `wrangler deploy
+	--minify`).
+- Quick checks: confirm `ASSETS` binding serves files from `public/` and that
+	`src/index.ts` uses `Hono<{ Bindings: CloudflareBindings }>()`.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+- Amendments to this constitution require a documented PR with rationale and a
+	changelog. Changes that add or remove core principles are MAJOR bumps; minor
+	clarifications are PATCH bumps. The repository maintainer(s) MUST approve
+	governance PRs.
+- Versioning: follow semantic versioning for constitution versions:
+	- MAJOR: Backwards-incompatible principle redefinitions or removals
+	- MINOR: New principle or material expansion
+	- PATCH: Wording clarifications, typo fixes
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2025-11-14 | **Last Amended**: 2025-11-14
