@@ -74,6 +74,11 @@ rollouts.
 ## Development Workflow
 
 - Local dev: `pnpm run dev` (starts `wrangler dev`). Use the browser to
+- Types: run `pnpm run cf-typegen` after modifying `wrangler.jsonc` or adding
+- Build/Deploy: `pnpm run deploy` for production deploys (uses `wrangler deploy
+- Quick checks: confirm `ASSETS` binding serves files from `public/` and that
+
+- Local dev: `pnpm run dev` (starts `wrangler dev`). Use the browser to
 	exercise `public/index.html` and API endpoints (e.g., `/message`).
 - Types: run `pnpm run cf-typegen` after modifying `wrangler.jsonc` or adding
 	bindings; commit the resulting `worker-configuration.d.ts` file.
@@ -81,6 +86,11 @@ rollouts.
 	--minify`).
 - Quick checks: confirm `ASSETS` binding serves files from `public/` and that
 	`src/index.ts` uses `Hono<{ Bindings: CloudflareBindings }>()`.
+
+- CI: A GitHub Actions check `cf-typegen-check.yml` validates that
+	`worker-configuration.d.ts` is regenerated and committed when `wrangler.jsonc`
+	or binding-related files change. If the check fails, regenerate types locally
+	and include the updated `worker-configuration.d.ts` in the PR.
 
 ## Governance
 
