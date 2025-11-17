@@ -3,6 +3,9 @@ dist/
 build/
 *.min.js
 
+# Vite build output
+public/dist/
+
 # dev
 .yarn/
 !.yarn/releases

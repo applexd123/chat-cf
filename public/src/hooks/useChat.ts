@@ -125,7 +125,7 @@ export function useChat(): UseChatReturn {
 				abortRef.current = null;
 			}
 		},
-		[conversationId, sessionId, isStreaming]
+		[conversationId, sessionId]
 	);
 
 	const abortStream = useCallback(() => {
