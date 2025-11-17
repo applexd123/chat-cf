@@ -3,17 +3,18 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Hello, World!</title>
+		<title>AI Chat</title>
+		<link rel="stylesheet" href="/src/styles/app.css" />
 	</head>
 	<body>
-		<h1 id="heading"></h1>
-		<script>
-			fetch('/message')
-				.then((resp) => resp.text())
-				.then((text) => {
-					const h1 = document.getElementById('heading');
-					h1.textContent = text;
-				});
+		<div id="root"></div>
+		<script type="module">
+			import React from "react";
+			import { createRoot } from "react-dom/client";
+			import { App } from "./src/App.jsx";
+
+			const root = createRoot(document.getElementById("root"));
+			root.render(React.createElement(App));
 		</script>
 	</body>
 </html>

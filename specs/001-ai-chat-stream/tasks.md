@@ -64,34 +64,34 @@ Phase 6: Polish & Cross-Cutting Concerns (final)
 
 ### 2.1 API & Database Infrastructure
 
-- [ ] T009 [P] Create Hono app entry point with middleware pipeline in `src/index.ts`: CORS, logging, error handling, session ID validation
-- [ ] T010 [P] Implement D1 database client wrapper in `src/services/db.ts`: query execution, error handling, type safety wrapper
-- [ ] T011 [P] Create ClientSession model type in `src/models/client-session.ts`: UUID generation, validation, metadata handling
-- [ ] T012 [P] Create Conversation model type in `src/models/conversation.ts`: with relationships to ClientSession and Message entities
-- [ ] T013 [P] Create Message model type in `src/models/message.ts`: role (user|assistant), content, timestamps
-- [ ] T014 [P] Create StreamChunk model type in `src/models/stream-chunk.ts`: ephemeral chunk with index, text, type (content|error), timestamp
+- [x] T009 [P] Create Hono app entry point with middleware pipeline in `src/index.ts`: CORS, logging, error handling, session ID validation
+- [x] T010 [P] Implement D1 database client wrapper in `src/services/db.ts`: query execution, error handling, type safety wrapper
+- [x] T011 [P] Create ClientSession model type in `src/models/client-session.ts`: UUID generation, validation, metadata handling
+- [x] T012 [P] Create Conversation model type in `src/models/conversation.ts`: with relationships to ClientSession and Message entities
+- [x] T013 [P] Create Message model type in `src/models/message.ts`: role (user|assistant), content, timestamps
+- [x] T014 [P] Create StreamChunk model type in `src/models/stream-chunk.ts`: ephemeral chunk with index, text, type (content|error), timestamp
 
 ### 2.2 Streaming & AI Integration
 
-- [ ] T015 [P] Create OpenRouter API client wrapper in `src/services/openrouter.ts`: fetch-based REST API calls (OpenAI-compatible), streaming response handling, error propagation, support for model routing (per research.md decision)
-- [ ] T016 [P] Implement streaming chunk parser in `src/utils/stream.ts`: SSE format parsing, chunk validation, error extraction from OpenAI-compatible API responses, delta.choices[0].delta.content parsing
-- [ ] T017 [P] Create session management utility in `src/utils/session.ts`: UUID generation, header validation, session ID extraction from X-Session-ID header
+- [x] T015 [P] Create OpenRouter API client wrapper in `src/services/openrouter.ts`: fetch-based REST API calls (OpenAI-compatible), streaming response handling, error propagation, support for model routing (per research.md decision)
+- [x] T016 [P] Implement streaming chunk parser in `src/utils/stream.ts`: SSE format parsing, chunk validation, error extraction from OpenAI-compatible API responses, delta.choices[0].delta.content parsing
+- [x] T017 [P] Create session management utility in `src/utils/session.ts`: UUID generation, header validation, session ID extraction from X-Session-ID header
 
 ### 2.3 Frontend State & API Client
 
-- [ ] T018 [P] Create React hooks for state management in `public/src/hooks/useChat.ts`: manage messages, streaming state, error state, conversation ID
-- [ ] T019 [P] Create API client service in `public/src/services/api.ts`: fetch wrapper for `/api/chat/stream` (SSE with EventSource or fetch), `/api/conversations` (list), `/api/conversations/{id}` (load history)
-- [ ] T020 [P] Create session storage utility in `public/src/services/session.ts`: localStorage wrapper for session ID (generate on first visit, persist across page reloads)
+- [x] T018 [P] Create React hooks for state management in `public/src/hooks/useChat.ts`: manage messages, streaming state, error state, conversation ID
+- [x] T019 [P] Create API client service in `public/src/services/api.ts`: fetch wrapper for `/api/chat/stream` (SSE with EventSource or fetch), `/api/conversations` (list), `/api/conversations/{id}` (load history)
+- [x] T020 [P] Create session storage utility in `public/src/services/session.ts`: localStorage wrapper for session ID (generate on first visit, persist across page reloads)
 
 ### 2.4 Error Handling & Logging
 
-- [ ] T021 [P] Implement structured logging middleware in `src/middleware/logger.ts`: request ID, session ID, conversation ID, timestamps, error details (per spec.md NFR-003)
-- [ ] T022 [P] Create error handling utilities in `src/utils/errors.ts`: error codes (INVALID_REQUEST, RATE_LIMIT_EXCEEDED, INTERNAL_ERROR), error chunk formatting for SSE, error messages
+- [x] T021 [P] Implement structured logging middleware in `src/middleware/logger.ts`: request ID, session ID, conversation ID, timestamps, error details (per spec.md NFR-003)
+- [x] T022 [P] Create error handling utilities in `src/utils/errors.ts`: error codes (INVALID_REQUEST, RATE_LIMIT_EXCEEDED, INTERNAL_ERROR), error chunk formatting for SSE, error messages
 
 ### 2.5 CI & Type Safety
 
-- [ ] T023 [P] Configure TypeScript type generation in CI: ensure `pnpm run cf-typegen` is part of pre-commit hook (per constitution.md Principle II)
-- [ ] T024 [P] Create `pnpm run build` script for production minification in `package.json`: wrangler build, React build, bundle size validation (<50KB constraint per plan.md)
+- [x] T023 [P] Configure TypeScript type generation in CI: ensure `pnpm run cf-typegen` is part of pre-commit hook (per constitution.md Principle II)
+- [x] T024 [P] Create `pnpm run build` script for production minification in `package.json`: wrangler build, React build, bundle size validation (<50KB constraint per plan.md)
 
 **Checkpoint**: Foundation complete. All 3 user stories can now be implemented independently in parallel.
 
@@ -110,17 +110,17 @@ Phase 6: Polish & Cross-Cutting Concerns (final)
 
 ### Implementation for User Story 1
 
-- [ ] T025 [P] [US1] Create session creation/lookup logic in `src/handlers/chat-stream.ts`: generate session ID if missing, verify X-Session-ID header, update ClientSession.last_activity
-- [ ] T026 [P] [US1] Create conversation creation handler in `src/handlers/chat-stream.ts`: generate conversation ID on first request (or accept existing), link to session ID
-- [ ] T027 [US1] Implement POST `/api/chat/stream` handler in `src/handlers/chat-stream.ts`: accept prompt + conversationId (optional), validate input (text-only, no nulls), trigger streaming response
-- [ ] T028 [US1] Implement OpenRouter API streaming integration in `src/handlers/chat-stream.ts`: fetch to OpenRouter API (`https://openrouter.ai/api/v1/chat/completions`), parse SSE chunks, format as JSON StreamChunk objects, send to client via `c.streamText()` or `c.stream()`
-- [ ] T029 [US1] Implement first-chunk latency tracking in `src/handlers/chat-stream.ts`: log timestamp of first StreamChunk, validate against 1s SLA (per spec.md SC-001)
-- [ ] T030 [US1] Persist final message to D1 in `src/handlers/chat-stream.ts`: after streaming completes, save full response text as Message entity with role='assistant', update Conversation.updated_at
-- [ ] T031 [US1] [P] Create ChatDisplay React component in `public/src/components/ChatDisplay.tsx`: display streaming chunks in real-time, show partial text as it arrives, clear after stream completes
-- [ ] T032 [US1] [P] Create ChatInputForm React component in `public/src/components/ChatInputForm.tsx`: text input field (text-only validation per spec.md), submit button, disable during streaming, clear input after submit
-- [ ] T033 [US1] [P] Create ErrorDisplay React component in `public/src/components/ErrorDisplay.tsx`: display error chunks from API (fail-fast error propagation), show error code + message, auto-dismiss after 5s
-- [ ] T034 [US1] Integrate ChatDisplay + ChatInputForm + ErrorDisplay in `public/src/App.tsx`: wire hooks (useChat), manage streaming state, pass callbacks
-- [ ] T035 [US1] Add rate-limiting middleware in `src/middleware/rate-limiter.ts`: basic per-session rate limit (e.g., 10 req/min per X-Session-ID), return 429 on limit exceeded (per spec.md FR-007)
+- [x] T025 [P] [US1] Create session creation/lookup logic in `src/handlers/chat-stream.ts`: generate session ID if missing, verify X-Session-ID header, update ClientSession.last_activity
+- [x] T026 [P] [US1] Create conversation creation handler in `src/handlers/chat-stream.ts`: generate conversation ID on first request (or accept existing), link to session ID
+- [x] T027 [US1] Implement POST `/api/chat/stream` handler in `src/handlers/chat-stream.ts`: accept prompt + conversationId (optional), validate input (text-only, no nulls), trigger streaming response
+- [x] T028 [US1] Implement OpenRouter API streaming integration in `src/handlers/chat-stream.ts`: fetch to OpenRouter API (`https://openrouter.ai/api/v1/chat/completions`), parse SSE chunks, format as JSON StreamChunk objects, send to client via `c.streamText()` or `c.stream()`
+- [x] T029 [US1] Implement first-chunk latency tracking in `src/handlers/chat-stream.ts`: log timestamp of first StreamChunk, validate against 1s SLA (per spec.md SC-001)
+- [x] T030 [US1] Persist final message to D1 in `src/handlers/chat-stream.ts`: after streaming completes, save full response text as Message entity with role='assistant', update Conversation.updated_at
+- [x] T031 [US1] [P] Create ChatDisplay React component in `public/src/components/ChatDisplay.tsx`: display streaming chunks in real-time, show partial text as it arrives, clear after stream completes
+- [x] T032 [US1] [P] Create ChatInputForm React component in `public/src/components/ChatInputForm.tsx`: text input field (text-only validation per spec.md), submit button, disable during streaming, clear input after submit
+- [x] T033 [US1] [P] Create ErrorDisplay React component in `public/src/components/ErrorDisplay.tsx`: display error chunks from API (fail-fast error propagation), show error code + message, auto-dismiss after 5s
+- [x] T034 [US1] Integrate ChatDisplay + ChatInputForm + ErrorDisplay in `public/src/App.tsx`: wire hooks (useChat), manage streaming state, pass callbacks
+- [x] T035 [US1] Add rate-limiting middleware in `src/middleware/rate-limiter.ts`: basic per-session rate limit (e.g., 10 req/min per X-Session-ID), return 429 on limit exceeded (per spec.md FR-007)
 - [ ] T036 [US1] Add test: Contract test for `POST /api/chat/stream` endpoint in `tests/contract/chat-stream.test.ts`: verify request schema (prompt required, text-only), verify response schema (SSE StreamChunk objects), verify first chunk within 1s
 - [ ] T037 [US1] Add test: Integration test for one-off Q&A in `tests/integration/streaming.test.ts`: send prompt, collect chunks, verify completion, verify message persisted to D1
 
