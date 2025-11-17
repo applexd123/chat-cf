@@ -4,7 +4,6 @@
  */
 
 import type { Context, Next } from "hono";
-import type { CloudflareBindings } from "../../worker-configuration.js";
 import { createStandardErrorResponse } from "../utils/errors.js";
 
 interface RateLimitEntry {
@@ -25,7 +24,7 @@ const RATE_LIMIT_MAX_REQUESTS = 10; // 10 requests per minute
 export async function rateLimiterMiddleware(
 	c: Context<{ Bindings: CloudflareBindings }>,
 	next: Next
-): Promise<Response> {
+): Promise<Response | void> {
 	const sessionId = c.req.header("X-Session-ID");
 
 	if (!sessionId) {

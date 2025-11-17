@@ -12,7 +12,7 @@ app.use("*", async (c, next) => {
 	c.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
 	c.header("Access-Control-Allow-Headers", "Content-Type, X-Session-ID");
 	if (c.req.method === "OPTIONS") {
-		return c.text("", 204);
+		return c.body(null, 204);
 	}
 	await next();
 });
@@ -36,7 +36,6 @@ app.use("/api/*", async (c, next) => {
 	if (!sessionId) {
 		// Generate new session ID if missing
 		const newSessionId = getOrGenerateSessionId(null);
-		c.req.header("X-Session-ID", newSessionId);
 		c.header("X-Session-ID", newSessionId);
 	} else {
 		// Validate existing session ID

@@ -8,6 +8,7 @@
 - **Package Manager**: pnpm
 - **Frontend**: React 19+ with Vite for bundling
 - **Database**: Cloudflare D1 (SQLite-based)
+- **ORM**: Drizzle ORM (type-safe database queries)
 - **Testing**: Vitest
 
 ## Key Dependencies
@@ -17,6 +18,8 @@
 - `wrangler` - Cloudflare Workers CLI and type generation
 - `vite` - Frontend build tool
 - `vitest` - Test runner
+- `drizzle-orm` - Type-safe ORM for D1 database
+- `drizzle-kit` - Migration generation and management
 
 ## Common Commands
 
@@ -50,11 +53,84 @@ pnpm run test:watch       # Run tests in watch mode
 pnpm run deploy           # Build + deploy to Cloudflare Workers (production)
 ```
 
+### Database & Migrations
+```bash
+pnpm run db:generate      # Generate migrations from schema changes
+pnpm run db:migrate       # Apply migrations to local D1 database
+pnpm run db:migrate:prod  # Apply migrations to production D1 database
+pnpm run db:drop          # Drop last migration (use with caution)
+```
+
+## Database & ORM
+
+### Drizzle ORM
+
+This project uses Drizzle ORM for type-safe database operations with Cloudflare D1.
+
+**Key Features**:
+- Zero runtime dependencies (edge-compatible)
+- TypeScript-first with full type inference
+- Lightweight (~15KB bundle size)
+- Native D1 adapter
+- SQL-like query builder
+
+**Schema Location**: `src/db/schema.ts`
+
+**Migration Directory**: `src/db/migrations/`
+
+### Database Schema
+
+All database tables are defined in `src/db/schema.ts` using Drizzle's schema API:
+
+```typescript
+import { sqliteTable, text, index } from 'drizzle-orm/sqlite-core';
+
+export const clientSessions = sqliteTable('client_sessions', {
+  id: text('id').primaryKey(),
+  createdAt: text('created_at').notNull(),
+  lastActivity: text('last_activity').notNull(),
+  metadata: text('metadata'),
+}, (table) => ({
+  activityIdx: index('idx_session_activity').on(table.lastActivity.desc()),
+}));
+```
+
+### Migration Workflow
+
+1. **Modify Schema**: Edit `src/db/schema.ts`
+2. **Generate Migration**: Run `pnpm run db:generate`
+3. **Review SQL**: Check generated files in `src/db/migrations/`
+4. **Apply Locally**: Run `pnpm run db:migrate` to test
+5. **Apply to Production**: Run `pnpm run db:migrate:prod`
+
+### Using Drizzle in Code
+
+```typescript
+import { drizzle } from 'drizzle-orm/d1';
+import { eq, desc } from 'drizzle-orm';
+import * as schema from '../db/schema.js';
+
+// Initialize ORM with D1 binding
+const orm = drizzle(c.env.DB, { schema });
+
+// Type-safe queries
+const sessions = await orm
+  .select()
+  .from(schema.clientSessions)
+  .where(eq(schema.clientSessions.id, sessionId))
+  .all();
+```
+
+### Data Mapping
+
+Drizzle uses camelCase (TypeScript convention) while the database uses snake_case (SQL convention). The `src/db/mappers.ts` file provides mapping functions to convert between conventions and maintain compatibility with existing model interfaces.
+
 ## Configuration Files
 
 - `wrangler.jsonc` - Workers config (bindings, D1 database, assets, observability)
 - `tsconfig.json` - TypeScript config (strict mode, ESNext, JSX)
 - `worker-configuration.d.ts` - AUTO-GENERATED types (never edit manually)
+- `drizzle.config.ts` - Drizzle ORM configuration (schema path, migrations directory)
 - `vite.config.ts` - Frontend build config
 - `vitest.config.ts` - Test runner config
 - `.dev.vars` - Local environment variables (gitignored, use `.dev.vars.example` as template)

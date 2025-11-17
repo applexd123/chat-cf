@@ -4,7 +4,6 @@
  */
 
 import type { Context, Next } from "hono";
-import type { CloudflareBindings } from "../../worker-configuration.js";
 
 export interface LogContext {
 	requestId: string;
@@ -25,9 +24,9 @@ function generateRequestId(): string {
  * Structured logging middleware
  */
 export async function loggerMiddleware(
-	c: Context<{ Bindings: CloudflareBindings }>,
+	c: Context<{ Bindings: CloudflareBindings; Variables: { requestId: string } }>,
 	next: Next
-): Promise<Response> {
+): Promise<Response | void> {
 	const requestId = generateRequestId();
 	const startTime = Date.now();
 
@@ -49,7 +48,7 @@ export async function loggerMiddleware(
 	console.log(JSON.stringify({ type: "request", ...logContext }));
 
 	try {
-		const response = await next();
+		await next();
 
 		// Log response
 		const duration = Date.now() - startTime;
@@ -57,17 +56,9 @@ export async function loggerMiddleware(
 			JSON.stringify({
 				type: "response",
 				...logContext,
-				status: response?.status || 500,
 				duration,
 			})
 		);
-
-		// Add request ID to response header (if response exists and has headers)
-		if (response && response.headers) {
-			response.headers.set("X-Request-ID", requestId);
-		}
-
-		return response;
 	} catch (error) {
 		// Log error
 		const duration = Date.now() - startTime;

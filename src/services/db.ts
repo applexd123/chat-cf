@@ -3,10 +3,13 @@
  * Provides type-safe database operations with error handling
  */
 
-import type { CloudflareBindings, D1Result, D1ExecResult } from "../../worker-configuration.js";
+import { drizzle } from 'drizzle-orm/d1';
+import { eq, desc } from 'drizzle-orm';
 import type { ClientSession } from "../models/client-session.js";
 import type { Conversation } from "../models/conversation.js";
 import type { Message } from "../models/message.js";
+import * as schema from '../db/schema.js';
+import { mapDbToClientSession, mapDbToConversation, mapDbToMessage, stringifyMetadata } from '../db/mappers.js';
 
 export class DatabaseError extends Error {
 	constructor(
@@ -23,73 +26,11 @@ export class DatabaseError extends Error {
  * D1 database client wrapper
  */
 export class DatabaseClient {
-	constructor(private readonly db: CloudflareBindings["DB"]) {}
+	private readonly orm;
 
-	/**
-	 * Execute a prepared statement and return results
-	 */
-	async query<T = unknown>(
-		sql: string,
-		bindings?: unknown[]
-	): Promise<D1Result<T>> {
-		try {
-			const stmt = this.db.prepare(sql);
-			if (bindings && bindings.length > 0) {
-				return await stmt.bind(...bindings).all<T>();
-			}
-			return await stmt.all<T>();
-		} catch (error) {
-			throw new DatabaseError(
-				`Database query failed: ${error instanceof Error ? error.message : String(error)}`,
-				"QUERY_ERROR",
-				error
-			);
-		}
-	}
-
-	/**
-	 * Execute a prepared statement and return first row
-	 */
-	async queryFirst<T = unknown>(
-		sql: string,
-		bindings?: unknown[]
-	): Promise<T | null> {
-		try {
-			const stmt = this.db.prepare(sql);
-			if (bindings && bindings.length > 0) {
-				const result = await stmt.bind(...bindings).first<T>();
-				return result || null;
-			}
-			const result = await stmt.first<T>();
-			return result || null;
-		} catch (error) {
-			throw new DatabaseError(
-				`Database query failed: ${error instanceof Error ? error.message : String(error)}`,
-				"QUERY_ERROR",
-				error
-			);
-		}
-	}
-
-	/**
-	 * Execute a write operation (INSERT, UPDATE, DELETE)
-	 */
-	async execute(sql: string, bindings?: unknown[]): Promise<D1ExecResult> {
-		try {
-			const stmt = this.db.prepare(sql);
-			if (bindings && bindings.length > 0) {
-				const result = await stmt.bind(...bindings).run();
-				return result as unknown as D1ExecResult;
-			}
-			const result = await stmt.run();
-			return result as unknown as D1ExecResult;
-		} catch (error) {
-			throw new DatabaseError(
-				`Database execute failed: ${error instanceof Error ? error.message : String(error)}`,
-				"EXECUTE_ERROR",
-				error
-			);
-		}
+	constructor(private readonly db: CloudflareBindings["DB"]) {
+		// Initialize Drizzle ORM instance with D1 binding
+		this.orm = drizzle(db, { schema });
 	}
 
 	/**
@@ -99,38 +40,56 @@ export class DatabaseClient {
 		sessionId: string,
 		metadata?: Record<string, unknown>
 	): Promise<ClientSession> {
-		// Try to get existing session
-		const existing = await this.queryFirst<ClientSession>(
-			"SELECT * FROM client_sessions WHERE id = ?",
-			[sessionId]
-		);
+		try {
+			// Try to get existing session
+			const existing = await this.orm
+				.select()
+				.from(schema.clientSessions)
+				.where(eq(schema.clientSessions.id, sessionId))
+				.get();
 
-		if (existing) {
-			// Update last_activity
-			await this.execute(
-				"UPDATE client_sessions SET last_activity = ? WHERE id = ?",
-				[new Date().toISOString(), sessionId]
-			);
+			if (existing) {
+				// Update last_activity
+				const now = new Date().toISOString();
+				await this.orm
+					.update(schema.clientSessions)
+					.set({ lastActivity: now })
+					.where(eq(schema.clientSessions.id, sessionId))
+					.run();
+
+				// Return updated session using mapper
+				return mapDbToClientSession({
+					...existing,
+					lastActivity: now,
+				});
+			}
+
+			// Create new session
+			const now = new Date().toISOString();
+			await this.orm
+				.insert(schema.clientSessions)
+				.values({
+					id: sessionId,
+					createdAt: now,
+					lastActivity: now,
+					metadata: stringifyMetadata(metadata),
+				})
+				.run();
+
+			// Return newly created session
 			return {
-				...existing,
-				last_activity: new Date().toISOString(),
+				id: sessionId,
+				created_at: now,
+				last_activity: now,
+				metadata,
 			};
+		} catch (error) {
+			throw new DatabaseError(
+				`Failed to get or create session: ${error instanceof Error ? error.message : String(error)}`,
+				"QUERY_ERROR",
+				error
+			);
 		}
-
-		// Create new session
-		const now = new Date().toISOString();
-		const metadataJson = metadata ? JSON.stringify(metadata) : null;
-		await this.execute(
-			"INSERT INTO client_sessions (id, created_at, last_activity, metadata) VALUES (?, ?, ?, ?)",
-			[sessionId, now, now, metadataJson]
-		);
-
-		return {
-			id: sessionId,
-			created_at: now,
-			last_activity: now,
-			metadata: metadata || undefined,
-		};
 	}
 
 	/**
@@ -139,24 +98,38 @@ export class DatabaseClient {
 	async getConversationWithMessages(
 		conversationId: string
 	): Promise<{ conversation: Conversation; messages: Message[] } | null> {
-		const conversation = await this.queryFirst<Conversation>(
-			"SELECT * FROM conversations WHERE id = ?",
-			[conversationId]
-		);
+		try {
+			// Query conversation using Drizzle ORM
+			const conversationResult = await this.orm
+				.select()
+				.from(schema.conversations)
+				.where(eq(schema.conversations.id, conversationId))
+				.get();
 
-		if (!conversation) {
-			return null;
+			if (!conversationResult) {
+				return null;
+			}
+
+			// Query messages using Drizzle ORM with ORDER BY
+			const messagesResults = await this.orm
+				.select()
+				.from(schema.messages)
+				.where(eq(schema.messages.conversationId, conversationId))
+				.orderBy(schema.messages.createdAt)
+				.all();
+
+			// Map results using mapper functions
+			return {
+				conversation: mapDbToConversation(conversationResult),
+				messages: messagesResults.map(mapDbToMessage),
+			};
+		} catch (error) {
+			throw new DatabaseError(
+				`Failed to get conversation with messages: ${error instanceof Error ? error.message : String(error)}`,
+				"QUERY_ERROR",
+				error
+			);
 		}
-
-		const messages = await this.query<Message>(
-			"SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
-			[conversationId]
-		);
-
-		return {
-			conversation,
-			messages: messages.results || [],
-		};
 	}
 
 	/**
@@ -167,19 +140,36 @@ export class DatabaseClient {
 		sessionId: string,
 		title?: string
 	): Promise<Conversation> {
-		const now = new Date().toISOString();
-		await this.execute(
-			"INSERT INTO conversations (id, session_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-			[id, sessionId, title || null, now, now]
-		);
+		try {
+			const now = new Date().toISOString();
+			
+			// Insert using Drizzle ORM
+			await this.orm
+				.insert(schema.conversations)
+				.values({
+					id,
+					sessionId,
+					title: title || null,
+					createdAt: now,
+					updatedAt: now,
+				})
+				.run();
 
-		return {
-			id,
-			session_id: sessionId,
-			title: title || null,
-			created_at: now,
-			updated_at: now,
-		};
+			// Return the created conversation using mapper
+			return mapDbToConversation({
+				id,
+				sessionId,
+				title: title || null,
+				createdAt: now,
+				updatedAt: now,
+			});
+		} catch (error) {
+			throw new DatabaseError(
+				`Failed to create conversation: ${error instanceof Error ? error.message : String(error)}`,
+				"INSERT_ERROR",
+				error
+			);
+		}
 	}
 
 	/**
@@ -191,25 +181,43 @@ export class DatabaseClient {
 		role: Message["role"],
 		content: string
 	): Promise<Message> {
-		const now = new Date().toISOString();
-		await this.execute(
-			"INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
-			[id, conversationId, role, content, now]
-		);
+		try {
+			const now = new Date().toISOString();
+			
+			// Insert message using Drizzle ORM
+			await this.orm
+				.insert(schema.messages)
+				.values({
+					id,
+					conversationId,
+					role,
+					content,
+					createdAt: now,
+				})
+				.run();
 
-		// Update conversation's updated_at
-		await this.execute(
-			"UPDATE conversations SET updated_at = ? WHERE id = ?",
-			[now, conversationId]
-		);
+			// Update conversation's updated_at using Drizzle ORM
+			await this.orm
+				.update(schema.conversations)
+				.set({ updatedAt: now })
+				.where(eq(schema.conversations.id, conversationId))
+				.run();
 
-		return {
-			id,
-			conversation_id: conversationId,
-			role,
-			content,
-			created_at: now,
-		};
+			// Return the created message using mapper
+			return mapDbToMessage({
+				id,
+				conversationId,
+				role,
+				content,
+				createdAt: now,
+			});
+		} catch (error) {
+			throw new DatabaseError(
+				`Failed to create message: ${error instanceof Error ? error.message : String(error)}`,
+				"INSERT_ERROR",
+				error
+			);
+		}
 	}
 
 	/**
@@ -219,12 +227,25 @@ export class DatabaseClient {
 		sessionId: string,
 		limit: number = 10
 	): Promise<Conversation[]> {
-		const result = await this.query<Conversation>(
-			"SELECT * FROM conversations WHERE session_id = ? ORDER BY updated_at DESC LIMIT ?",
-			[sessionId, limit]
-		);
+		try {
+			// Query using Drizzle ORM with WHERE, ORDER BY, and LIMIT
+			const results = await this.orm
+				.select()
+				.from(schema.conversations)
+				.where(eq(schema.conversations.sessionId, sessionId))
+				.orderBy(desc(schema.conversations.updatedAt))
+				.limit(limit)
+				.all();
 
-		return result.results || [];
+			// Map Drizzle results to model Conversation interface
+			return results.map(mapDbToConversation);
+		} catch (error) {
+			throw new DatabaseError(
+				`Failed to list conversations: ${error instanceof Error ? error.message : String(error)}`,
+				"QUERY_ERROR",
+				error
+			);
+		}
 	}
 }
 

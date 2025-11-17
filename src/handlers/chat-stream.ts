@@ -5,7 +5,6 @@
 
 import type { Context } from "hono";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions.js";
-import type { CloudflareBindings } from "../../worker-configuration.js";
 import { DatabaseClient } from "../services/db.js";
 import { OpenRouterClient } from "../services/openrouter.js";
 import { getOrGenerateSessionId } from "../utils/session.js";

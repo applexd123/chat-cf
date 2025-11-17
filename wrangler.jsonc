@@ -18,7 +18,8 @@
 		{
 			"binding": "DB",
 			"database_name": "chat-cf-db",
-			"database_id": "c83c4b24-993b-4a31-bac2-3e12b346bf8a"
+			"database_id": "c83c4b24-993b-4a31-bac2-3e12b346bf8a",
+			"migrations_dir": "src/db/migrations"
 		}
 	]
 	/**
