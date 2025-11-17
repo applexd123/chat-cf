@@ -4,6 +4,7 @@
  */
 
 import type { Context } from "hono";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions.js";
 import type { CloudflareBindings } from "../../worker-configuration.js";
 import { DatabaseClient } from "../services/db.js";
 import { OpenRouterClient } from "../services/openrouter.js";
@@ -61,7 +62,7 @@ export async function handleChatStream(
 
 	// Get or create conversation
 	let conversationId = body.conversationId;
-	let messageHistory: Array<{ role: string; content: string }> = [];
+	let messageHistory: ChatCompletionMessageParam[] = [];
 
 	if (conversationId) {
 		// Load existing conversation

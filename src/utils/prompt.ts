@@ -3,6 +3,7 @@
  * Converts Message[] array into OpenAI-compatible messages format
  */
 
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions.js";
 import type { Message } from "../models/message.js";
 
 /**
@@ -10,9 +11,9 @@ import type { Message } from "../models/message.js";
  */
 export function formatMessagesForOpenRouter(
 	messages: Message[]
-): Array<{ role: string; content: string }> {
+): ChatCompletionMessageParam[] {
 	return messages.map((msg) => ({
-		role: msg.role,
+		role: msg.role as "user" | "assistant" | "system",
 		content: msg.content,
 	}));
 }
@@ -24,7 +25,7 @@ export function formatMessagesForOpenRouter(
 export function prepareContextForOpenRouter(
 	history: Message[],
 	newUserMessage: string
-): Array<{ role: string; content: string }> {
+): ChatCompletionMessageParam[] {
 	const formattedHistory = formatMessagesForOpenRouter(history);
 	return [
 		...formattedHistory,
