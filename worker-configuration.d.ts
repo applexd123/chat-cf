@@ -15,6 +15,9 @@ declare namespace Cloudflare {
 
 export interface CloudflareBindings extends Cloudflare.Env {}
 
+// Export D1 types for use in other modules
+export type { D1Result, D1ExecResult };
+
 // Export empty object to make this file a module
 export {};
 

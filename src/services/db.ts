@@ -3,7 +3,7 @@
  * Provides type-safe database operations with error handling
  */
 
-import type { CloudflareBindings } from "../../worker-configuration.js";
+import type { CloudflareBindings, D1Result, D1ExecResult } from "../../worker-configuration.js";
 import type { ClientSession } from "../models/client-session.js";
 import type { Conversation } from "../models/conversation.js";
 import type { Message } from "../models/message.js";
@@ -78,9 +78,11 @@ export class DatabaseClient {
 		try {
 			const stmt = this.db.prepare(sql);
 			if (bindings && bindings.length > 0) {
-				return await stmt.bind(...bindings).run();
+				const result = await stmt.bind(...bindings).run();
+				return result as unknown as D1ExecResult;
 			}
-			return await stmt.run();
+			const result = await stmt.run();
+			return result as unknown as D1ExecResult;
 		} catch (error) {
 			throw new DatabaseError(
 				`Database execute failed: ${error instanceof Error ? error.message : String(error)}`,
