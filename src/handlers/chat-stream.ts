@@ -52,6 +52,9 @@ export async function handleChatStream(
 		);
 	}
 	
+	// Get AI model from environment (defaults to Claude 3.5 Sonnet)
+	const aiModel = c.env.AI_MODEL || "anthropic/claude-3.5-sonnet";
+	
 	const openRouter = new OpenRouterClient({
 		apiKey,
 	});
@@ -104,7 +107,7 @@ export async function handleChatStream(
 				let chunkIndex = 0;
 				for await (const chunk of openRouter.streamChatCompletion(
 					{
-						model: "anthropic/claude-3.5-sonnet",
+						model: aiModel,
 						messages: messageHistory,
 						max_tokens: 500,
 					},

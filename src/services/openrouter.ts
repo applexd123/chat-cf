@@ -43,7 +43,7 @@ export class OpenRouterClient {
 			baseURL: config.baseUrl || "https://openrouter.ai/api/v1",
 		});
 		
-		this.defaultModel = config.defaultModel || "anthropic/claude-3.5-sonnet";
+		this.defaultModel = config.defaultModel || "deepseek/deepseek-v3.2-exp";
 	}
 
 	/**

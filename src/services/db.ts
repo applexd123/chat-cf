@@ -247,5 +247,31 @@ export class DatabaseClient {
 			);
 		}
 	}
+
+	/**
+	 * Get the most recent active conversation for a session
+	 */
+	async getActiveConversation(
+		sessionId: string
+	): Promise<Conversation | null> {
+		try {
+			// Get the most recently updated conversation for this session
+			const result = await this.orm
+				.select()
+				.from(schema.conversations)
+				.where(eq(schema.conversations.sessionId, sessionId))
+				.orderBy(desc(schema.conversations.updatedAt))
+				.limit(1)
+				.get();
+
+			return result ? mapDbToConversation(result) : null;
+		} catch (error) {
+			throw new DatabaseError(
+				`Failed to get active conversation: ${error instanceof Error ? error.message : String(error)}`,
+				"QUERY_ERROR",
+				error
+			);
+		}
+	}
 }
 

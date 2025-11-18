@@ -14,7 +14,7 @@
 		"pre-commit": "pnpm run cf-typegen && pnpm run type-check",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "wrangler d1 migrations apply DB --local",
-		"db:migrate:prod": "wrangler d1 migrations apply DB",
+		"db:migrate:prod": "wrangler d1 migrations apply DB --remote",
 		"db:drop": "drizzle-kit drop"
 	},
 	"dependencies": {
