@@ -8,8 +8,9 @@ import { eq, desc } from 'drizzle-orm';
 import type { ClientSession } from "../models/client-session.js";
 import type { Conversation } from "../models/conversation.js";
 import type { Message } from "../models/message.js";
+import type { CharacterCardV3 } from "../models/character-card.js";
 import * as schema from '../db/schema.js';
-import { mapDbToClientSession, mapDbToConversation, mapDbToMessage, stringifyMetadata } from '../db/mappers.js';
+import { mapDbToClientSession, mapDbToConversation, mapDbToMessage, mapDbToCharacterCard, stringifyMetadata } from '../db/mappers.js';
 
 export class DatabaseError extends Error {
 	constructor(
@@ -138,7 +139,9 @@ export class DatabaseClient {
 	async createConversation(
 		id: string,
 		sessionId: string,
-		title?: string
+		title?: string,
+		characterCardId?: string,
+		compiledContext?: string
 	): Promise<Conversation> {
 		try {
 			const now = new Date().toISOString();
@@ -152,6 +155,8 @@ export class DatabaseClient {
 					title: title || null,
 					createdAt: now,
 					updatedAt: now,
+					characterCardId: characterCardId || null,
+					compiledContext: compiledContext || null,
 				})
 				.run();
 
@@ -162,6 +167,8 @@ export class DatabaseClient {
 				title: title || null,
 				createdAt: now,
 				updatedAt: now,
+				characterCardId: characterCardId || null,
+				compiledContext: compiledContext || null,
 			});
 		} catch (error) {
 			throw new DatabaseError(
@@ -268,6 +275,258 @@ export class DatabaseClient {
 		} catch (error) {
 			throw new DatabaseError(
 				`Failed to get active conversation: ${error instanceof Error ? error.message : String(error)}`,
+				"QUERY_ERROR",
+				error
+			);
+		}
+	}
+
+	/**
+	 * Create a new character card
+	 */
+	async createCharacterCard(
+		id: string,
+		characterCard: CharacterCardV3
+	): Promise<{ id: string; name: string; data: CharacterCardV3; created_at: string; modified_at: string }> {
+		try {
+			const now = new Date().toISOString();
+			
+			// Insert using Drizzle ORM
+			await this.orm
+				.insert(schema.characterCards)
+				.values({
+					id,
+					name: characterCard.data.name,
+					data: JSON.stringify(characterCard),
+					createdAt: now,
+					modifiedAt: now,
+				})
+				.run();
+
+			// Return the created character card
+			return {
+				id,
+				name: characterCard.data.name,
+				data: characterCard,
+				created_at: now,
+				modified_at: now,
+			};
+		} catch (error) {
+			throw new DatabaseError(
+				`Failed to create character card: ${error instanceof Error ? error.message : String(error)}`,
+				"INSERT_ERROR",
+				error
+			);
+		}
+	}
+
+	/**
+	 * Get a character card by ID
+	 */
+	async getCharacterCard(
+		id: string
+	): Promise<{ id: string; name: string; data: CharacterCardV3; created_at: string; modified_at: string } | null> {
+		try {
+			const result = await this.orm
+				.select()
+				.from(schema.characterCards)
+				.where(eq(schema.characterCards.id, id))
+				.get();
+
+			if (!result) {
+				return null;
+			}
+
+			return mapDbToCharacterCard(result);
+		} catch (error) {
+			throw new DatabaseError(
+				`Failed to get character card: ${error instanceof Error ? error.message : String(error)}`,
+				"QUERY_ERROR",
+				error
+			);
+		}
+	}
+
+	/**
+	 * Update a character card
+	 */
+	async updateCharacterCard(
+		id: string,
+		characterCard: CharacterCardV3
+	): Promise<{ id: string; name: string; data: CharacterCardV3; created_at: string; modified_at: string } | null> {
+		try {
+			const now = new Date().toISOString();
+			
+			// Check if card exists
+			const existing = await this.orm
+				.select()
+				.from(schema.characterCards)
+				.where(eq(schema.characterCards.id, id))
+				.get();
+
+			if (!existing) {
+				return null;
+			}
+
+			// Update using Drizzle ORM
+			await this.orm
+				.update(schema.characterCards)
+				.set({
+					name: characterCard.data.name,
+					data: JSON.stringify(characterCard),
+					modifiedAt: now,
+				})
+				.where(eq(schema.characterCards.id, id))
+				.run();
+
+			// Return the updated character card
+			return {
+				id,
+				name: characterCard.data.name,
+				data: characterCard,
+				created_at: existing.createdAt,
+				modified_at: now,
+			};
+		} catch (error) {
+			throw new DatabaseError(
+				`Failed to update character card: ${error instanceof Error ? error.message : String(error)}`,
+				"UPDATE_ERROR",
+				error
+			);
+		}
+	}
+
+	/**
+	 * Delete a character card
+	 */
+	async deleteCharacterCard(id: string): Promise<boolean> {
+		try {
+			// Check if card exists
+			const existing = await this.orm
+				.select()
+				.from(schema.characterCards)
+				.where(eq(schema.characterCards.id, id))
+				.get();
+
+			if (!existing) {
+				return false;
+			}
+
+			// Delete using Drizzle ORM
+			await this.orm
+				.delete(schema.characterCards)
+				.where(eq(schema.characterCards.id, id))
+				.run();
+
+			return true;
+		} catch (error) {
+			throw new DatabaseError(
+				`Failed to delete character card: ${error instanceof Error ? error.message : String(error)}`,
+				"DELETE_ERROR",
+				error
+			);
+		}
+	}
+
+	/**
+	 * Get conversation with character card and messages
+	 */
+	async getConversationWithCharacterCard(
+		conversationId: string
+	): Promise<{
+		conversation: Conversation;
+		messages: Message[];
+		characterCard: { id: string; name: string; data: CharacterCardV3; created_at: string; modified_at: string } | null;
+	} | null> {
+		try {
+			// Query conversation using Drizzle ORM
+			const conversationResult = await this.orm
+				.select()
+				.from(schema.conversations)
+				.where(eq(schema.conversations.id, conversationId))
+				.get();
+
+			if (!conversationResult) {
+				return null;
+			}
+
+			// Query messages using Drizzle ORM with ORDER BY
+			const messagesResults = await this.orm
+				.select()
+				.from(schema.messages)
+				.where(eq(schema.messages.conversationId, conversationId))
+				.orderBy(schema.messages.createdAt)
+				.all();
+
+			// Query character card if present
+			let characterCard = null;
+			if (conversationResult.characterCardId) {
+				const cardResult = await this.orm
+					.select()
+					.from(schema.characterCards)
+					.where(eq(schema.characterCards.id, conversationResult.characterCardId))
+					.get();
+
+				if (cardResult) {
+					characterCard = mapDbToCharacterCard(cardResult);
+				}
+			}
+
+			// Map results using mapper functions
+			return {
+				conversation: mapDbToConversation(conversationResult),
+				messages: messagesResults.map(mapDbToMessage),
+				characterCard,
+			};
+		} catch (error) {
+			throw new DatabaseError(
+				`Failed to get conversation with character card: ${error instanceof Error ? error.message : String(error)}`,
+				"QUERY_ERROR",
+				error
+			);
+		}
+	}
+
+	/**
+	 * Update conversation's compiled context
+	 */
+	async updateConversationCompiledContext(
+		conversationId: string,
+		compiledContext: string
+	): Promise<void> {
+		try {
+			await this.orm
+				.update(schema.conversations)
+				.set({ compiledContext })
+				.where(eq(schema.conversations.id, conversationId))
+				.run();
+		} catch (error) {
+			throw new DatabaseError(
+				`Failed to update compiled context: ${error instanceof Error ? error.message : String(error)}`,
+				"UPDATE_ERROR",
+				error
+			);
+		}
+	}
+
+	/**
+	 * List all character cards
+	 */
+	async listCharacterCards(
+		limit: number = 50
+	): Promise<Array<{ id: string; name: string; data: CharacterCardV3; created_at: string; modified_at: string }>> {
+		try {
+			const results = await this.orm
+				.select()
+				.from(schema.characterCards)
+				.orderBy(desc(schema.characterCards.modifiedAt))
+				.limit(limit)
+				.all();
+
+			return results.map(mapDbToCharacterCard);
+		} catch (error) {
+			throw new DatabaseError(
+				`Failed to list character cards: ${error instanceof Error ? error.message : String(error)}`,
 				"QUERY_ERROR",
 				error
 			);

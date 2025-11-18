@@ -36,6 +36,8 @@ export function mapDbToConversation(
     title: db.title,
     created_at: db.createdAt,
     updated_at: db.updatedAt,
+    character_card_id: db.characterCardId,
+    compiled_context: db.compiledContext,
   };
 }
 
@@ -63,4 +65,20 @@ export function stringifyMetadata(
   metadata?: Record<string, unknown>
 ): string | null {
   return metadata ? JSON.stringify(metadata) : null;
+}
+
+/**
+ * Map Drizzle CharacterCard to CharacterCardV3 model
+ * Parses JSON data field
+ */
+export function mapDbToCharacterCard(
+  db: schema.CharacterCard
+): any {
+  return {
+    id: db.id,
+    name: db.name,
+    data: JSON.parse(db.data),
+    created_at: db.createdAt,
+    modified_at: db.modifiedAt,
+  };
 }

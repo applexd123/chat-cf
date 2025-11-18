@@ -9,7 +9,7 @@ const app = new Hono<{ Bindings: CloudflareBindings }>();
 // Simple CORS middleware
 app.use("*", async (c, next) => {
 	c.header("Access-Control-Allow-Origin", "*");
-	c.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+	c.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
 	c.header("Access-Control-Allow-Headers", "Content-Type, X-Session-ID");
 	if (c.req.method === "OPTIONS") {
 		return c.body(null, 204);
@@ -61,9 +61,23 @@ app.onError((err, c) => {
 // API routes
 import { handleChatStream } from "./handlers/chat-stream.js";
 import { handleListConversations, handleGetConversation } from "./handlers/conversations.js";
+import {
+	handleCreateCharacterCard,
+	handleListCharacterCards,
+	handleGetCharacterCard,
+	handleUpdateCharacterCard,
+	handleDeleteCharacterCard,
+} from "./handlers/character-cards.js";
 
 app.post("/api/chat/stream", handleChatStream);
 app.get("/api/conversations", handleListConversations);
 app.get("/api/conversations/:conversationId", handleGetConversation);
+
+// Character card routes
+app.post("/api/character-cards", handleCreateCharacterCard);
+app.get("/api/character-cards", handleListCharacterCards);
+app.get("/api/character-cards/:id", handleGetCharacterCard);
+app.put("/api/character-cards/:id", handleUpdateCharacterCard);
+app.delete("/api/character-cards/:id", handleDeleteCharacterCard);
 
 export default app;

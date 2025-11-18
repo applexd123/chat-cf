@@ -54,6 +54,7 @@ export class OpenRouterClient {
 		signal?: AbortSignal
 	): AsyncGenerator<StreamChunk, void, unknown> {
 		try {
+			// TODO 打印请求上下文
 			const stream = await this.client.chat.completions.create(
 				{
 					model: request.model,
@@ -91,6 +92,7 @@ export class OpenRouterClient {
 		signal?: AbortSignal
 	): Promise<string> {
 		try {
+			// TODO 打印请求上下文
 			const response = await this.client.chat.completions.create(
 				{
 					model: request.model,

@@ -12,6 +12,7 @@ import { prepareContextForOpenRouter } from "../utils/prompt.js";
 import { createStandardErrorResponse, formatErrorAsStreamChunk } from "../utils/errors.js";
 import { generateConversationId } from "../models/conversation.js";
 import { generateMessageId } from "../models/message.js";
+import { PromptBuilder, type CompiledContext } from "../services/prompt-builder.js";
 
 /**
  * POST /api/chat/stream
@@ -23,7 +24,7 @@ export async function handleChatStream(
 	const sessionId = c.req.header("X-Session-ID") || getOrGenerateSessionId(null);
 
 	// Parse request body
-	let body: { prompt?: string; conversationId?: string };
+	let body: { prompt?: string; conversationId?: string; characterCardId?: string };
 	try {
 		body = await c.req.json();
 	} catch (error) {
@@ -65,10 +66,13 @@ export async function handleChatStream(
 	// Get or create conversation
 	let conversationId = body.conversationId;
 	let messageHistory: ChatCompletionMessageParam[] = [];
+	let characterCardId = body.characterCardId;
+	let compiledContext: CompiledContext | undefined;
+	let useCharacterCardPrompt = false;
 
 	if (conversationId) {
 		// Explicit conversation ID provided - load it
-		const result = await db.getConversationWithMessages(conversationId);
+		const result = await db.getConversationWithCharacterCard(conversationId);
 		if (!result) {
 			return c.json(createStandardErrorResponse("NOT_FOUND"), 404);
 		}
@@ -78,7 +82,33 @@ export async function handleChatStream(
 			return c.json(createStandardErrorResponse("UNAUTHORIZED"), 401);
 		}
 
-		messageHistory = prepareContextForOpenRouter(result.messages, prompt);
+		// Load character card if present
+		if (result.conversation.character_card_id) {
+			characterCardId = result.conversation.character_card_id;
+			useCharacterCardPrompt = true;
+			
+			// Load compiled context if available
+			if (result.conversation.compiled_context) {
+				try {
+					compiledContext = JSON.parse(result.conversation.compiled_context);
+				} catch (error) {
+					console.error("Failed to parse compiled context:", error);
+					// Will recompile below
+				}
+			}
+		}
+
+		// Prepare message history
+		if (useCharacterCardPrompt) {
+			// Will use PromptBuilder, just store messages
+			messageHistory = result.messages.map(m => ({
+				role: m.role,
+				content: m.content,
+			}));
+		} else {
+			// Use traditional prompt preparation
+			messageHistory = prepareContextForOpenRouter(result.messages, prompt);
+		}
 	} else {
 		// No conversation ID provided - reuse active conversation or create new one
 		const activeConversation = await db.getActiveConversation(sessionId);
@@ -86,9 +116,33 @@ export async function handleChatStream(
 		if (activeConversation) {
 			// Reuse existing active conversation
 			conversationId = activeConversation.id;
-			const result = await db.getConversationWithMessages(conversationId);
+			const result = await db.getConversationWithCharacterCard(conversationId);
 			if (result) {
-				messageHistory = prepareContextForOpenRouter(result.messages, prompt);
+				// Load character card if present
+				if (result.conversation.character_card_id) {
+					characterCardId = result.conversation.character_card_id;
+					useCharacterCardPrompt = true;
+					
+					// Load compiled context if available
+					if (result.conversation.compiled_context) {
+						try {
+							compiledContext = JSON.parse(result.conversation.compiled_context);
+						} catch (error) {
+							console.error("Failed to parse compiled context:", error);
+							// Will recompile below
+						}
+					}
+				}
+
+				// Prepare message history
+				if (useCharacterCardPrompt) {
+					messageHistory = result.messages.map(m => ({
+						role: m.role,
+						content: m.content,
+					}));
+				} else {
+					messageHistory = prepareContextForOpenRouter(result.messages, prompt);
+				}
 			} else {
 				// Fallback if messages can't be loaded
 				messageHistory = [{ role: "user", content: prompt }];
@@ -96,9 +150,92 @@ export async function handleChatStream(
 		} else {
 			// Create new conversation (first conversation for this session)
 			conversationId = generateConversationId();
-			await db.createConversation(conversationId, sessionId);
+			await db.createConversation(conversationId, sessionId, undefined, characterCardId);
 			messageHistory = [{ role: "user", content: prompt }];
+			
+			// If character card provided, mark for use
+			if (characterCardId) {
+				useCharacterCardPrompt = true;
+			}
 		}
+	}
+
+	// If using character card, compile static context if needed and build structured messages
+	if (useCharacterCardPrompt && characterCardId) {
+		// Load character card if not already loaded
+		const characterCardData = await db.getCharacterCard(characterCardId);
+		if (!characterCardData) {
+			return c.json(createStandardErrorResponse("NOT_FOUND"), 404);
+		}
+
+		// Compile static context if not already compiled
+		if (!compiledContext) {
+			const promptBuilder = new PromptBuilder();
+			compiledContext = await promptBuilder.compileStaticContext(
+				characterCardData.data,
+				"User" // Default user name, could be customized
+			);
+			
+			// Store compiled context in database for future use
+			await db.updateConversationCompiledContext(
+				conversationId,
+				JSON.stringify(compiledContext)
+			);
+		}
+
+		// Build structured messages for OpenRouter using compiled context
+		const structuredMessages: ChatCompletionMessageParam[] = [];
+		
+		// Add system prompt if present
+		if (compiledContext.systemPrompt) {
+			structuredMessages.push({
+				role: "system",
+				content: compiledContext.systemPrompt,
+			});
+		}
+		
+		// Add character description
+		structuredMessages.push({
+			role: "system",
+			content: compiledContext.description,
+		});
+		
+		// Add personality if present
+		if (compiledContext.personality) {
+			structuredMessages.push({
+				role: "system",
+				content: `Personality: ${compiledContext.personality}`,
+			});
+		}
+		
+		// Add scenario if present
+		if (compiledContext.scenario) {
+			structuredMessages.push({
+				role: "system",
+				content: `Scenario: ${compiledContext.scenario}`,
+			});
+		}
+		
+		// Add constant lorebook entries
+		for (const entry of compiledContext.constantLorebookEntries) {
+			const role = entry.decorators.role || "system";
+			structuredMessages.push({
+				role: role as "system" | "user" | "assistant",
+				content: entry.processedContent,
+			});
+		}
+		
+		// Add conversation history
+		structuredMessages.push(...messageHistory);
+		
+		// Add current user prompt
+		structuredMessages.push({
+			role: "user",
+			content: prompt,
+		});
+		
+		// Replace messageHistory with structured messages
+		messageHistory = structuredMessages;
 	}
 
 	// Save user message

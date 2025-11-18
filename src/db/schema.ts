@@ -20,6 +20,24 @@ export const clientSessions = sqliteTable(
 );
 
 // ============================================================================
+// CharacterCard: Store character card data in CCv3 format
+// ============================================================================
+
+export const characterCards = sqliteTable(
+  'character_cards',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    data: text('data').notNull(), // JSON string of CharacterCardV3
+    createdAt: text('created_at').notNull(),
+    modifiedAt: text('modified_at').notNull(),
+  },
+  (table) => ({
+    nameIdx: index('idx_card_name').on(table.name),
+  })
+);
+
+// ============================================================================
 // Conversation: Group related messages into multi-turn chat sessions
 // ============================================================================
 
@@ -33,6 +51,10 @@ export const conversations = sqliteTable(
     title: text('title'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
+    characterCardId: text('character_card_id').references(() => characterCards.id, {
+      onDelete: 'set null',
+    }),
+    compiledContext: text('compiled_context'), // Pre-compiled static character context (JSON)
   },
   (table) => ({
     sessionUpdatedIdx: index('idx_conv_session_updated').on(
@@ -74,10 +96,18 @@ export const clientSessionsRelations = relations(clientSessions, ({ many }) => (
   conversations: many(conversations),
 }));
 
+export const characterCardsRelations = relations(characterCards, ({ many }) => ({
+  conversations: many(conversations),
+}));
+
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
   session: one(clientSessions, {
     fields: [conversations.sessionId],
     references: [clientSessions.id],
+  }),
+  characterCard: one(characterCards, {
+    fields: [conversations.characterCardId],
+    references: [characterCards.id],
   }),
   messages: many(messages),
 }));
@@ -95,6 +125,9 @@ export const messagesRelations = relations(messages, ({ one }) => ({
 
 export type ClientSession = typeof clientSessions.$inferSelect;
 export type NewClientSession = typeof clientSessions.$inferInsert;
+
+export type CharacterCard = typeof characterCards.$inferSelect;
+export type NewCharacterCard = typeof characterCards.$inferInsert;
 
 export type Conversation = typeof conversations.$inferSelect;
 export type NewConversation = typeof conversations.$inferInsert;
