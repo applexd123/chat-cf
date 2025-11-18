@@ -52,8 +52,8 @@ export async function handleChatStream(
 		);
 	}
 	
-	// Get AI model from environment (defaults to Claude 3.5 Sonnet)
-	const aiModel = c.env.AI_MODEL || "anthropic/claude-3.5-sonnet";
+	// Get AI model from environment (defaults to deepseek)
+	const aiModel = c.env.AI_MODEL || "deepseek/deepseek-v3.2-exp";
 	
 	const openRouter = new OpenRouterClient({
 		apiKey,
