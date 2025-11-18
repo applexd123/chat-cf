@@ -54,7 +54,19 @@ export class OpenRouterClient {
 		signal?: AbortSignal
 	): AsyncGenerator<StreamChunk, void, unknown> {
 		try {
-			// TODO 打印请求上下文
+			console.log(JSON.stringify({
+				event: "openrouter_request",
+				model: request.model,
+				message_count: request.messages.length,
+				max_tokens: request.max_tokens,
+				stream: true,
+				messages: request.messages.map(msg => ({
+					role: msg.role,
+					content: msg.content,
+					content_length: typeof msg.content === 'string' ? msg.content.length : 0
+				}))
+			}));
+
 			const stream = await this.client.chat.completions.create(
 				{
 					model: request.model,
@@ -92,7 +104,19 @@ export class OpenRouterClient {
 		signal?: AbortSignal
 	): Promise<string> {
 		try {
-			// TODO 打印请求上下文
+			console.log(JSON.stringify({
+				event: "openrouter_request",
+				model: request.model,
+				message_count: request.messages.length,
+				max_tokens: request.max_tokens,
+				stream: false,
+				messages: request.messages.map(msg => ({
+					role: msg.role,
+					content: msg.content,
+					content_length: typeof msg.content === 'string' ? msg.content.length : 0
+				}))
+			}));
+
 			const response = await this.client.chat.completions.create(
 				{
 					model: request.model,

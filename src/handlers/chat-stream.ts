@@ -160,7 +160,7 @@ export async function handleChatStream(
 		}
 	}
 
-	// If using character card, compile static context if needed and build structured messages
+	// If using character card, compile static context if needed and build full prompt
 	if (useCharacterCardPrompt && characterCardId) {
 		// Load character card if not already loaded
 		const characterCardData = await db.getCharacterCard(characterCardId);
@@ -168,9 +168,10 @@ export async function handleChatStream(
 			return c.json(createStandardErrorResponse("NOT_FOUND"), 404);
 		}
 
+		const promptBuilder = new PromptBuilder();
+
 		// Compile static context if not already compiled
 		if (!compiledContext) {
-			const promptBuilder = new PromptBuilder();
 			compiledContext = await promptBuilder.compileStaticContext(
 				characterCardData.data,
 				"User" // Default user name, could be customized
@@ -183,59 +184,28 @@ export async function handleChatStream(
 			);
 		}
 
-		// Build structured messages for OpenRouter using compiled context
-		const structuredMessages: ChatCompletionMessageParam[] = [];
-		
-		// Add system prompt if present
-		if (compiledContext.systemPrompt) {
-			structuredMessages.push({
-				role: "system",
-				content: compiledContext.systemPrompt,
-			});
-		}
-		
-		// Add character description
-		structuredMessages.push({
-			role: "system",
-			content: compiledContext.description,
+		// Convert message history from ChatCompletionMessageParam to Message[]
+		// Filter out system messages as Message type only supports user/assistant
+		const messages = messageHistory
+			.filter(msg => msg.role === 'user' || msg.role === 'assistant')
+			.map((msg, index) => ({
+				id: `history-${index}`,
+				conversation_id: conversationId,
+				role: msg.role as "user" | "assistant",
+				content: typeof msg.content === 'string' ? msg.content : '',
+				created_at: new Date().toISOString(),
+			}));
+
+		// Build complete structured messages using PromptBuilder
+		messageHistory = await promptBuilder.buildPrompt({
+			compiledContext,
+			characterCard: characterCardData.data,
+			messages,
+			userPrompt: prompt,
+			userName: "User",
+			templateName: "default",
+			conversationId,
 		});
-		
-		// Add personality if present
-		if (compiledContext.personality) {
-			structuredMessages.push({
-				role: "system",
-				content: `Personality: ${compiledContext.personality}`,
-			});
-		}
-		
-		// Add scenario if present
-		if (compiledContext.scenario) {
-			structuredMessages.push({
-				role: "system",
-				content: `Scenario: ${compiledContext.scenario}`,
-			});
-		}
-		
-		// Add constant lorebook entries
-		for (const entry of compiledContext.constantLorebookEntries) {
-			const role = entry.decorators.role || "system";
-			structuredMessages.push({
-				role: role as "system" | "user" | "assistant",
-				content: entry.processedContent,
-			});
-		}
-		
-		// Add conversation history
-		structuredMessages.push(...messageHistory);
-		
-		// Add current user prompt
-		structuredMessages.push({
-			role: "user",
-			content: prompt,
-		});
-		
-		// Replace messageHistory with structured messages
-		messageHistory = structuredMessages;
 	}
 
 	// Save user message
@@ -261,7 +231,7 @@ export async function handleChatStream(
 					{
 						model: aiModel,
 						messages: messageHistory,
-						max_tokens: 500,
+						max_tokens: 5000,
 					},
 					abortController.signal
 				)) {

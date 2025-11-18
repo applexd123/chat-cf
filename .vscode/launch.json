@@ -5,17 +5,32 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug",
+            "name": "Debug Wrangler (Local)",
             "request": "launch",
-            "runtimeArgs": [
-                "run",
-                "dev"
-            ],
+            "type": "node",
             "runtimeExecutable": "pnpm",
+            "runtimeArgs": [
+                "wrangler",
+                "dev",
+                "--local",
+                "--inspector-port",
+                "9229"
+            ],
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "type": "node"
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "attachSimplePort": 9229
         },
+        {
+            "name": "Attach to Wrangler",
+            "type": "node",
+            "request": "attach",
+            "port": 9229,
+            "skipFiles": [
+                "<node_internals>/**"
+            ]
+        }
     ]
 }

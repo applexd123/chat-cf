@@ -138,8 +138,9 @@ export class PromptBuilder {
   /**
    * Build complete prompt for AI model using compiled context
    * Processes dynamic content (lorebook matching, current messages)
+   * Returns structured messages for OpenRouter API
    */
-  async buildPrompt(options: PromptBuildOptions): Promise<string> {
+  async buildPrompt(options: PromptBuildOptions): Promise<Array<{ role: 'system' | 'user' | 'assistant'; content: string }>> {
     const {
       compiledContext,
       characterCard,
@@ -223,19 +224,59 @@ export class PromptBuilder {
       group_only_greetings: [],
     };
     
-    // Prepare template context
-    const templateContext: TemplateContext = {
-      character: characterData,
-      messages: allMessages,
-      userName,
-      lorebookEntries: allLorebookEntries,
-      systemPrompt: context.systemPrompt,
-    };
+    // Build structured messages array instead of rendering template
+    const structuredMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
     
-    // Render template
-    const prompt = this.templateRenderer.render(templateName, templateContext);
+    // Add system prompt if present
+    if (context.systemPrompt) {
+      structuredMessages.push({
+        role: 'system',
+        content: context.systemPrompt,
+      });
+    }
     
-    return prompt;
+    // Add character description
+    structuredMessages.push({
+      role: 'system',
+      content: context.description,
+    });
+    
+    // Add personality if present
+    if (context.personality) {
+      structuredMessages.push({
+        role: 'system',
+        content: `Personality: ${context.personality}`,
+      });
+    }
+    
+    // Add scenario if present
+    if (context.scenario) {
+      structuredMessages.push({
+        role: 'system',
+        content: `Scenario: ${context.scenario}`,
+      });
+    }
+    
+    // Add lorebook entries (constant + dynamic)
+    for (const entry of allLorebookEntries) {
+      const role = entry.decorators.role || 'system';
+      structuredMessages.push({
+        role: role as 'system' | 'user' | 'assistant',
+        content: entry.processedContent,
+      });
+    }
+    
+    // Add conversation history (only user and assistant messages)
+    for (const msg of allMessages) {
+      if (msg.role === 'user' || msg.role === 'assistant') {
+        structuredMessages.push({
+          role: msg.role,
+          content: msg.content,
+        });
+      }
+    }
+    
+    return structuredMessages;
   }
 
   /**
