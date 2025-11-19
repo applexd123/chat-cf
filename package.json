@@ -2,7 +2,7 @@
 	"name": "chat-cf",
 	"type": "module",
 	"scripts": {
-		"dev": "pnpm run build:frontend && wrangler dev",
+		"dev": "pnpm run build:frontend && wrangler dev --local",
 		"dev:debug": "pnpm run build:frontend && wrangler dev --local --inspector-port 9229",
 		"dev:frontend": "vite",
 		"build:frontend": "vite build",
