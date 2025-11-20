@@ -25,7 +25,7 @@ describe("DatabaseClient.getActiveConversation", () => {
 		
 		// Verify the method accepts a string parameter
 		// We're just checking the signature, not executing
-		expect(db.getActiveConversation).toHaveLength(1);
+		expect(db.getActiveConversation).toHaveLength(2);
 	});
 });
 
