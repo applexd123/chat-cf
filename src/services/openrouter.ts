@@ -53,6 +53,20 @@ export class OpenRouterClient {
 		request: OpenRouterRequest,
 		signal?: AbortSignal
 	): AsyncGenerator<StreamChunk, void, unknown> {
+		// Mock mode for testing
+		if (request.model === "mock-model") {
+			const mockResponse = "This is a mock response for testing.";
+			const words = mockResponse.split(" ");
+			let index = 0;
+			
+			for (const word of words) {
+				yield createStreamChunk(index++, word + " ", "content");
+				// Simulate slight delay
+				await new Promise(resolve => setTimeout(resolve, 10));
+			}
+			return;
+		}
+
 		try {
 			console.log(JSON.stringify({
 				event: "openrouter_request",
@@ -87,9 +101,20 @@ export class OpenRouterClient {
 				}
 			}
 		} catch (error) {
+			console.error("Detailed OpenRouter API Error:", {
+				name: (error as Error).name,
+				message: (error as Error).message,
+				// @ts-ignore
+				code: error.code,
+				// @ts-ignore
+				type: error.type,
+				cause: (error as Error).cause
+			});
+
 			if (error instanceof OpenAI.APIError) {
+				const status = error.status ?? 'Connection';
 				throw new Error(
-					`OpenRouter API error: ${error.status} ${error.message}`
+					`OpenRouter API error: ${status} ${error.message}`
 				);
 			}
 			throw error;
@@ -131,9 +156,11 @@ export class OpenRouterClient {
 
 			return response.choices[0]?.message?.content || "";
 		} catch (error) {
+			console.error("Detailed OpenRouter API Error (Non-streaming):", error);
 			if (error instanceof OpenAI.APIError) {
+				const status = error.status ?? 'Connection';
 				throw new Error(
-					`OpenRouter API error: ${error.status} ${error.message}`
+					`OpenRouter API error: ${status} ${error.message}`
 				);
 			}
 			throw error;

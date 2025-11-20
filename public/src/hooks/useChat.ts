@@ -38,41 +38,64 @@ export interface UseChatReturn {
 /**
  * useChat hook
  */
-export function useChat(): UseChatReturn {
+export function useChat(activeCharacterId?: string): UseChatReturn {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isStreaming, setIsStreaming] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [conversationId, setConversationId] = useState<string | null>(null);
-	const [characterCardId, setCharacterCardId] = useState<string | null>(null);
+	const [characterCardId, setCharacterCardId] = useState<string | null>(activeCharacterId || null);
 	const [characterGreeting, setCharacterGreeting] = useState<string | null>(null);
 	const [sessionId] = useState(() => getOrCreateSessionId());
 	const abortRef = useRef<(() => void) | null>(null);
 
-	// Load conversation history on mount
+	// Update characterCardId if activeCharacterId changes
+	useEffect(() => {
+		if (activeCharacterId) {
+			setCharacterCardId(activeCharacterId);
+		}
+	}, [activeCharacterId]);
+
+	// Load conversation history on mount or when character changes
 	useEffect(() => {
 		async function loadHistory() {
+			if (!characterCardId) {
+				setConversationId(null);
+				setMessages([]);
+				return;
+			}
+
 			try {
-				// Get the most recent conversation for this session
+				// Get all conversations for this session
 				const conversations = await listConversations(sessionId);
 				
-				if (conversations.length > 0) {
-					const mostRecent = conversations[0];
+				// Filter for the current character
+				const relevantConvo = conversations.find(
+					(c) => c.character_card_id === characterCardId
+				);
+				
+				if (relevantConvo) {
 					const { messages: historyMessages } = await getConversation(
-						mostRecent.id,
+						relevantConvo.id,
 						sessionId
 					);
 					
-					setConversationId(mostRecent.id);
+					setConversationId(relevantConvo.id);
 					setMessages(historyMessages);
+				} else {
+					// No conversation found for this character, start fresh
+					setConversationId(null);
+					setMessages([]);
 				}
 			} catch (err) {
 				console.error("Failed to load conversation history:", err);
 				// Don't show error to user, just start fresh
+				setConversationId(null);
+				setMessages([]);
 			}
 		}
 
 		loadHistory();
-	}, [sessionId]);
+	}, [sessionId, characterCardId]);
 
 	// Load character greeting when character card is selected
 	useEffect(() => {

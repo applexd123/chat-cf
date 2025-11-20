@@ -111,7 +111,7 @@ export async function handleChatStream(
 		}
 	} else {
 		// No conversation ID provided - reuse active conversation or create new one
-		const activeConversation = await db.getActiveConversation(sessionId);
+		const activeConversation = await db.getActiveConversation(sessionId, characterCardId);
 		
 		if (activeConversation) {
 			// Reuse existing active conversation

@@ -4,7 +4,7 @@
  */
 
 import { drizzle } from 'drizzle-orm/d1';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import type { ClientSession } from "../models/client-session.js";
 import type { Conversation } from "../models/conversation.js";
 import type { Message } from "../models/message.js";
@@ -259,17 +259,33 @@ export class DatabaseClient {
 	 * Get the most recent active conversation for a session
 	 */
 	async getActiveConversation(
-		sessionId: string
+		sessionId: string,
+		characterCardId?: string
 	): Promise<Conversation | null> {
 		try {
 			// Get the most recently updated conversation for this session
-			const result = await this.orm
-				.select()
-				.from(schema.conversations)
-				.where(eq(schema.conversations.sessionId, sessionId))
-				.orderBy(desc(schema.conversations.updatedAt))
-				.limit(1)
-				.get();
+			let result;
+			
+			if (characterCardId) {
+				result = await this.orm
+					.select()
+					.from(schema.conversations)
+					.where(and(
+						eq(schema.conversations.sessionId, sessionId),
+						eq(schema.conversations.characterCardId, characterCardId)
+					))
+					.orderBy(desc(schema.conversations.updatedAt))
+					.limit(1)
+					.get();
+			} else {
+				result = await this.orm
+					.select()
+					.from(schema.conversations)
+					.where(eq(schema.conversations.sessionId, sessionId))
+					.orderBy(desc(schema.conversations.updatedAt))
+					.limit(1)
+					.get();
+			}
 
 			return result ? mapDbToConversation(result) : null;
 		} catch (error) {
